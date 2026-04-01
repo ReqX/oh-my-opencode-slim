@@ -319,3 +319,30 @@ describe('getAgentConfigs', () => {
     expect(configs.explorer.description).toBeDefined();
   });
 });
+
+describe('council agent model resolution', () => {
+  test('council agent uses config.council.master.model', () => {
+    const config = {
+      council: {
+        master: { model: 'anthropic/claude-sonnet-4-6' },
+        presets: {
+          default: {
+            councillors: {
+              alpha: { model: 'test/alpha-model' },
+            },
+            master: undefined,
+          },
+        },
+      },
+    } as unknown as PluginConfig;
+    const agents = createAgents(config);
+    const council = agents.find((a) => a.name === 'council');
+    expect(council?.config.model).toBe('anthropic/claude-sonnet-4-6');
+  });
+
+  test('council agent falls back to default without council config', () => {
+    const agents = createAgents();
+    const council = agents.find((a) => a.name === 'council');
+    expect(council?.config.model).toBe('openai/gpt-5.4-mini');
+  });
+});
