@@ -137,9 +137,13 @@ export function createAgents(config?: PluginConfig): AgentDefinition[] {
       }
       return librarianModel ?? (DEFAULT_MODELS.librarian as string);
     }
-    // Council agent's model comes from config.council.master.model
-    // so the TUI validates the user's actual model, not the hardcoded default
-    if (name === 'council' && config?.council?.master?.model) {
+    // Council and council-master agents' model comes from
+    // config.council.master.model so the TUI validates the user's
+    // actual model, not the hardcoded default
+    if (
+      (name === 'council' || name === 'council-master') &&
+      config?.council?.master?.model
+    ) {
       return config.council.master.model;
     }
     // Subagents always have a defined default model; cast is safe here
