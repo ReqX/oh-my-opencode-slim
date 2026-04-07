@@ -42,7 +42,10 @@ function getPluginEntry(): string {
     const pluginEntryPath = cliEntryPath.match(
       /[\\/]dist[\\/]cli[\\/]index\.js$/,
     )
-      ? cliEntryPath.replace(/[\\/]dist[\\/]cli[\\/]index\.js$/, '/dist/index.js')
+      ? cliEntryPath.replace(
+          /[\\/]dist[\\/]cli[\\/]index\.js$/,
+          '/dist/index.js',
+        )
       : null;
 
     if (!pluginEntryPath) {
