@@ -425,6 +425,56 @@ describe('createTodoContinuationHook', () => {
       expect(hasContinuation(ctx.client.session.prompt)).toBe(false);
     });
 
+    test('sub-agent session.busy does NOT cancel orchestrator timer', async () => {
+      const ctx = createMockContext({
+        todoResult: {
+          data: [
+            { id: '1', content: 'todo1', status: 'pending', priority: 'high' },
+          ],
+        },
+        messagesResult: {
+          data: [
+            {
+              info: { role: 'assistant' },
+              parts: [{ type: 'text', text: 'Working...' }],
+            },
+          ],
+        },
+      });
+      const hook = createTodoContinuationHook(ctx, {
+        maxContinuations: 5,
+        cooldownMs: 100,
+      });
+
+      await hook.tool.auto_continue.execute({ enabled: true });
+
+      // Schedule a continuation for orchestrator session
+      await hook.handleEvent({
+        event: {
+          type: 'session.idle',
+          properties: { sessionID: 'session-123' },
+        },
+      });
+
+      // A sub-agent (different session) goes busy
+      await delay(50);
+      await hook.handleEvent({
+        event: {
+          type: 'session.status',
+          properties: {
+            sessionID: 'sub-agent-456',
+            status: { type: 'busy' },
+          },
+        },
+      });
+
+      // Advance past original cooldown
+      await delay(60);
+
+      // Orchestrator timer should still fire — prompt was called
+      expect(hasContinuation(ctx.client.session.prompt)).toBe(true);
+    });
+
     test('all todos complete → skip', async () => {
       const ctx = createMockContext({
         todoResult: {
@@ -756,6 +806,55 @@ describe('createTodoContinuationHook', () => {
 
       // Verify timer was cancelled and prompt NOT called
       expect(hasContinuation(ctx.client.session.prompt)).toBe(false);
+    });
+
+    test('sub-agent session.deleted does NOT cancel orchestrator timer', async () => {
+      const ctx = createMockContext({
+        todoResult: {
+          data: [
+            { id: '1', content: 'todo1', status: 'pending', priority: 'high' },
+          ],
+        },
+        messagesResult: {
+          data: [
+            {
+              info: { role: 'assistant' },
+              parts: [{ type: 'text', text: 'Working...' }],
+            },
+          ],
+        },
+      });
+      const hook = createTodoContinuationHook(ctx, {
+        maxContinuations: 5,
+        cooldownMs: 100,
+      });
+
+      await hook.tool.auto_continue.execute({ enabled: true });
+
+      // Schedule continuation for orchestrator session
+      await hook.handleEvent({
+        event: {
+          type: 'session.idle',
+          properties: { sessionID: 'session-123' },
+        },
+      });
+
+      // A sub-agent (different session) gets deleted
+      await delay(50);
+      await hook.handleEvent({
+        event: {
+          type: 'session.deleted',
+          properties: {
+            sessionID: 'sub-agent-456',
+          },
+        },
+      });
+
+      // Advance past original cooldown
+      await delay(60);
+
+      // Orchestrator timer should still fire — prompt was called
+      expect(hasContinuation(ctx.client.session.prompt)).toBe(true);
     });
 
     test('resets orchestrator session when deleted session matches', async () => {
