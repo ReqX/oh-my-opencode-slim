@@ -1,6 +1,7 @@
 import {
   createServer,
   type IncomingMessage,
+  type Server,
   type ServerResponse,
 } from 'node:http';
 import { URL } from 'node:url';
@@ -102,11 +103,14 @@ export function createInterviewServer(deps: {
     interviewId: string,
     answers: InterviewAnswer[],
   ) => Promise<void>;
+  port: number;
 }): {
   ensureStarted: () => Promise<string>;
+  close: () => void;
 } {
   let baseUrl: string | null = null;
   let startPromise: Promise<string> | null = null;
+  let activeServer: Server | null = null;
 
   async function handle(
     request: IncomingMessage,
@@ -181,12 +185,24 @@ export function createInterviewServer(deps: {
         });
       });
 
-      server.on('error', (error) => {
+      activeServer = server;
+
+      server.on('error', (error: NodeJS.ErrnoException) => {
+        server.close();
+        activeServer = null;
         startPromise = null;
-        reject(error);
+        if (error.code === 'EADDRINUSE') {
+          reject(
+            new Error(
+              `Interview server port ${deps.port} is already in use. Choose a different port or set port to 0 for an OS-assigned port.`,
+            ),
+          );
+        } else {
+          reject(error);
+        }
       });
 
-      server.listen(0, '127.0.0.1', () => {
+      server.listen(deps.port, '127.0.0.1', () => {
         const address = server.address();
         if (!address || typeof address === 'string') {
           startPromise = null;
@@ -204,5 +220,13 @@ export function createInterviewServer(deps: {
 
   return {
     ensureStarted,
+    close: () => {
+      if (activeServer) {
+        activeServer.close();
+        activeServer = null;
+      }
+      baseUrl = null;
+      startPromise = null;
+    },
   };
 }
