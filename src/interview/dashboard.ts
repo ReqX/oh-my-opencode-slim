@@ -98,6 +98,40 @@ function jitterMs(): number {
   return 50 + Math.floor(Math.random() * 150);
 }
 
+/**
+ * When a live interview is created or pushes state, remove any stale
+ * recovered- entry for the same slug.  Called from three code paths:
+ * HTTP create, HTTP state-push, and in-process pushState.
+ */
+function dedupRecovered(
+  interviewId: string,
+  cache: Map<string, InterviewStateEntry>,
+): void {
+  if (interviewId.startsWith('recovered-')) return;
+  const slug = extractResumeSlug(interviewId);
+  if (!slug) return;
+  const recoveredKey = `recovered-${slug}`;
+  if (cache.has(recoveredKey)) {
+    cache.delete(recoveredKey);
+  }
+}
+
+/**
+ * Check whether the cache already contains a live (non-recovered) entry
+ * whose slug matches the given one.  Used by rebuildFromFiles to skip
+ * adding a recovered entry when a live session already covers it.
+ */
+function hasLiveForSlug(
+  slug: string,
+  cache: Map<string, InterviewStateEntry>,
+): boolean {
+  return [...cache.values()].some(
+    (e) =>
+      !e.interviewId.startsWith('recovered-') &&
+      extractResumeSlug(e.interviewId) === slug,
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────
 
 interface RegisteredSession {
@@ -295,6 +329,7 @@ export function createDashboardServer(config: DashboardConfig): {
         const title = extractTitle(content) || entry.replace(/\.md$/, '');
         const summary = extractSummarySection(content);
         const baseName = entry.replace(/\.md$/, '');
+        const fm = parseFrontmatter(content);
 
         items.push({
           fileName: entry,
@@ -302,6 +337,8 @@ export function createDashboardServer(config: DashboardConfig): {
           title,
           summary:
             summary.length > 120 ? `${summary.slice(0, 120)}\u2026` : summary,
+          sessionID: fm?.sessionID,
+          directory: dir,
         });
       }
     }
@@ -350,6 +387,10 @@ export function createDashboardServer(config: DashboardConfig): {
 
         // Only add if not already in cache (sessions may have re-pushed)
         if (stateCache.has(interviewId)) continue;
+
+        // Also skip if a live interview already covers this slug.
+        const slug = slugify(baseName) || baseName;
+        if (hasLiveForSlug(slug, stateCache)) continue;
 
         stateCache.set(interviewId, {
           interviewId,
@@ -408,11 +449,16 @@ export function createDashboardServer(config: DashboardConfig): {
 
     // ── Health check (no auth required) ────────────────────────────
     if (request.method === 'GET' && pathname === '/api/health') {
+      // Stable signature: changes only when stateCache or session count changes
+      const sig = [...stateCache.values()]
+        .map((e) => `${e.interviewId}:${e.mode}:${e.lastUpdatedAt}`)
+        .sort()
+        .join('|');
       sendJson(response, 200, {
         status: 'ok',
-        timestamp: Date.now(),
         sessions: sessions.size,
         interviews: stateCache.size,
+        sig,
       });
       return;
     }
@@ -485,10 +531,15 @@ export function createDashboardServer(config: DashboardConfig): {
         createdAt: string;
         url: string;
         resumeSlug: string;
+        sessionID?: string;
+        directory?: string;
       }> = [...stateCache.values()]
         .sort((a, b) => b.lastUpdatedAt - a.lastUpdatedAt)
         .map((entry) => {
           const resumeSlug = extractResumeSlug(entry.interviewId);
+          const session = entry.sessionID
+            ? sessions.get(entry.sessionID)
+            : undefined;
           return {
             id: entry.interviewId,
             idea: entry.idea,
@@ -500,6 +551,8 @@ export function createDashboardServer(config: DashboardConfig): {
             createdAt: new Date(entry.lastUpdatedAt).toISOString(),
             url: `/interview/${entry.interviewId}`,
             resumeSlug,
+            sessionID: entry.sessionID,
+            directory: session?.directory,
           };
         });
       const outputFolder = config.outputFolder;
@@ -616,6 +669,7 @@ export function createDashboardServer(config: DashboardConfig): {
         filePath: '',
         nudgeAction: null,
       });
+      dedupRecovered(interviewId, stateCache);
       fileCache = null;
 
       const interviewUrl = `${baseUrl}/interview/${interviewId}`;
@@ -658,6 +712,7 @@ export function createDashboardServer(config: DashboardConfig): {
         if (state.questions) existing.questions = state.questions;
         if (state.filePath) existing.filePath = state.filePath;
         existing.lastUpdatedAt = Date.now();
+        dedupRecovered(interviewId, stateCache);
       } else {
         // New entry
         stateCache.set(interviewId, {
@@ -1013,6 +1068,7 @@ export function createDashboardServer(config: DashboardConfig): {
         if (existing.nudgeAction) entry.nudgeAction ??= existing.nudgeAction;
       }
       stateCache.set(entry.interviewId, entry);
+      dedupRecovered(entry.interviewId, stateCache);
     },
     getState: (id) => stateCache.get(id),
     storeAnswers: (id, answers) => {

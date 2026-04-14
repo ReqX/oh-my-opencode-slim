@@ -371,16 +371,11 @@ export function createInterviewManager(
       if (event.type === 'session.status' && sessionID) {
         const status = properties.status as { type?: string } | undefined;
         if (status?.type === 'idle') {
-          // Refresh state: calls getInterviewState → syncInterview → onStateChange
           const interviewId = service.getActiveInterviewId(sessionID);
-          if (interviewId) {
-            service.getInterviewState(interviewId).catch((err) => {
-              log('[interview] failed to refresh state', {
-                error: err instanceof Error ? err.message : String(err),
-              });
-            });
-          }
-          // Poll for pending answers/notes
+
+          // Process pending nudges/answers BEFORE refreshing state.
+          // handleNudgeAction sets sessionBusy=true, so the state refresh
+          // below correctly pushes 'awaiting-agent' instead of 'completed'.
           if (!isDashboard) {
             // Session mode: HTTP poll the dashboard
             await pollPendingAnswers(sessionID);
@@ -403,6 +398,16 @@ export function createInterviewManager(
               });
               await service.handleNudgeAction(interviewId, nudge);
             }
+          }
+
+          // Refresh state: calls getInterviewState → syncInterview → onStateChange
+          // This runs AFTER nudge/answer processing so sessionBusy is accurate.
+          if (interviewId) {
+            service.getInterviewState(interviewId).catch((err) => {
+              log('[interview] failed to refresh state', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
           }
         }
       }

@@ -72,6 +72,8 @@ export interface InterviewFileItem {
   resumeCommand: string;
   title: string;
   summary: string;
+  sessionID?: string;
+  directory?: string;
 }
 
 export interface InterviewState {

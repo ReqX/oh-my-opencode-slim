@@ -49,19 +49,17 @@ async function createTempInterviewDir() {
 
 describe('dashboard server', () => {
   describe('health endpoint', () => {
-    test('returns 200 with status ok and timestamp', async () => {
+    test('returns 200 with status ok and counts', async () => {
       const { baseUrl, cleanup } = await startDashboard();
       try {
         const response = await fetch(`${baseUrl}/api/health`);
         expect(response.status).toBe(200);
         const data = (await response.json()) as {
           status: string;
-          timestamp: number;
           sessions: number;
           interviews: number;
         };
         expect(data.status).toBe('ok');
-        expect(typeof data.timestamp).toBe('number');
         expect(data.sessions).toBe(0);
         expect(data.interviews).toBe(0);
       } finally {

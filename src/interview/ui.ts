@@ -4,6 +4,8 @@ interface DashboardInterviewItem extends InterviewListItem {
   url: string;
   mode: string;
   resumeSlug: string;
+  sessionID?: string;
+  directory?: string;
 }
 
 export function escapeHtml(value: string): string {
@@ -148,6 +150,7 @@ export function renderDashboardPage(
             <span class="card-idea">${escapeHtml(item.idea)}</span>
             <span class="card-status ${statusClass}">${statusLabel}</span>
           </div>
+          ${item.directory ? `<div class="card-dir">${escapeHtml(item.directory)}</div>` : ''}
           <div class="card-meta">
             <span>${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>
           </div>
@@ -156,11 +159,16 @@ export function renderDashboardPage(
           })
           .join('\n');
 
-  // Dedup: skip files whose slug appears in any interview ID
-  // Interview IDs are like "1234-1-slug" or "recovered-slug"
+  // Dedup: skip files whose sessionID matches an active/recovered interview.
+  // These are already visible in the "Interviews" section above.
+  const activeSessionIDs = new Set(
+    interviews
+      .map((i) => i.sessionID)
+      .filter((sid): sid is string => typeof sid === 'string'),
+  );
   const unrecoveredFiles = files.filter((f) => {
-    const slug = f.fileName.replace(/\.md$/, '');
-    return !interviews.some((i) => i.id.includes(slug));
+    if (f.sessionID && activeSessionIDs.has(f.sessionID)) return false;
+    return true;
   });
 
   const filesHtml =
@@ -174,6 +182,7 @@ export function renderDashboardPage(
             <span class="card-idea">${escapeHtml(item.title)}</span>
             <span class="card-status status-file">saved</span>
           </div>
+          ${item.directory ? `<div class="card-dir">${escapeHtml(item.directory)}</div>` : ''}
           <div class="card-summary">${escapeHtml(item.summary)}</div>
           <div class="resume-row">
             <code class="resume-cmd">${escapeHtml(item.resumeCommand)}</code>
@@ -248,6 +257,7 @@ export function renderDashboardPage(
       .status-file { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
       .card-meta { font-size: 13px; color: rgba(255,255,255,0.4); }
       .card-summary { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 12px; line-height: 1.5; }
+      .card-dir { font-size: 12px; color: rgba(255,255,255,0.3); margin-bottom: 8px; font-family: monospace; word-break: break-all; }
 
       .update-banner {
         position: fixed;
