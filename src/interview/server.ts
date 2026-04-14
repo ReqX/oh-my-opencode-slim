@@ -145,15 +145,8 @@ export function createInterviewServer(deps: {
     }
 
     if (request.method === 'GET' && pathname.startsWith('/interview/')) {
-      sendHtml(
-        response,
-        renderInterviewPage(
-          decodeURIComponent(pathname.split('/').pop() ?? 'unknown'),
-          extractResumeSlug(
-            decodeURIComponent(pathname.split('/').pop() ?? 'unknown'),
-          ),
-        ),
-      );
+      const rawId = decodeURIComponent(pathname.split('/').pop() ?? 'unknown');
+      sendHtml(response, renderInterviewPage(rawId, extractResumeSlug(rawId)));
       return;
     }
 

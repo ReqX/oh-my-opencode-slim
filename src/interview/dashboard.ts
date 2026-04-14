@@ -10,6 +10,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { URL } from 'node:url';
+import { log } from '../utils';
 import {
   extractSummarySection,
   extractTitle,
@@ -381,9 +382,9 @@ export function createDashboardServer(config: DashboardConfig): {
 
     if (rebuilt > 0) {
       fileCache = null;
-      // eslint-disable-next-line no-console
-      console.log(
+      log(
         `[interview] dashboard: rebuilt ${rebuilt} interview(s) from files`,
+        {},
       );
     }
   }
@@ -1108,6 +1109,7 @@ export async function tryBecomeDashboard(
           await new Promise((resolve) => setTimeout(resolve, jitterMs()));
           continue;
         }
+        return null; // All retries exhausted — treat as session
       }
       throw error;
     }
