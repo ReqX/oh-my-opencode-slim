@@ -540,6 +540,7 @@ describe('council_session tool', () => {
         })),
         getDeprecatedFields: mock(() => ['master', 'master_timeout']),
         getLegacyMasterModel: mock(() => 'anthropic/claude-opus-4-6'),
+        wasLegacyMasterApplied: true,
       } as unknown as CouncilManager;
       const tools = createCouncilTool(ctx, councilManager);
 
@@ -549,10 +550,44 @@ describe('council_session tool', () => {
 
       expect(result).toContain('Config warning');
       expect(result).toContain('`council.master`');
-      // master with legacy model → fallback warning
+      // master with legacy model applied → fallback warning
       expect(result).toContain('fallback for the council agent');
       // master_timeout is still "ignored"
       expect(result).toContain('deprecated and ignored');
+    });
+
+    test('includes superseded warning when legacy master.model exists but preset override wins', async () => {
+      const ctx = createMockPluginContext();
+      const councilManager = {
+        runCouncil: mock(async () => ({
+          success: true,
+          result: 'Synthesized response',
+          councillorResults: [
+            {
+              name: 'alpha',
+              model: 'test/model',
+              status: 'completed',
+              result: 'Response',
+            },
+          ],
+        })),
+        getDeprecatedFields: mock(() => ['master', 'master_timeout']),
+        getLegacyMasterModel: mock(() => 'anthropic/claude-opus-4-6'),
+        wasLegacyMasterApplied: false,
+      } as unknown as CouncilManager;
+      const tools = createCouncilTool(ctx, councilManager);
+
+      const result = await tools.council_session.execute({ prompt: 'Test' }, {
+        sessionID: 'test',
+      } as any);
+
+      expect(result).toContain('Config warning');
+      expect(result).toContain('`council.master`');
+      // Legacy model exists but preset override won → "ignored" message
+      expect(result).toContain('deprecated and ignored');
+      expect(result).not.toContain('fallback for the council agent');
+      // master_timeout also ignored
+      expect(result).toContain('`council.master_timeout`');
     });
   });
 });

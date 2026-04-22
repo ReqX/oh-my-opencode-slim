@@ -104,9 +104,15 @@ Returns the councillor responses with a summary footer.`,
             : deprecated.filter((f) => f !== 'master');
         const parts: string[] = [];
         if (hasMaster && legacyMasterModel) {
-          parts.push(
-            `\`council.master\` is deprecated and will be removed in a future version. Its \`model\` is currently used as a fallback for the council agent — add a \`council\` entry to your preset to make this explicit.`,
-          );
+          if (councilManager.wasLegacyMasterApplied) {
+            parts.push(
+              `\`council.master\` is deprecated and will be removed in a future version. Its \`model\` is currently used as a fallback for the council agent — add a \`council\` entry to your preset to make this explicit.`,
+            );
+          } else {
+            parts.push(
+              `\`council.master\` is deprecated and ignored — an explicit council preset override takes precedence. Remove \`master\` from your council config.`,
+            );
+          }
         }
         if (trulyIgnored.length > 0) {
           parts.push(

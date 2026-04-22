@@ -16,6 +16,7 @@ import {
   TMUX_SPAWN_DELAY_MS,
 } from '../config/constants';
 import type { CouncillorConfig, CouncilResult } from '../config/council-schema';
+import { getAgentOverride } from '../config/utils';
 import { log } from '../utils/logger';
 import {
   extractSessionResult,
@@ -61,9 +62,17 @@ export class CouncilManager {
     return this.deprecatedFields;
   }
 
-  /** Return the legacy master.model if it was used as fallback. */
+  /** Return the legacy master.model from config (regardless of whether applied). */
   getLegacyMasterModel(): string | undefined {
     return this.legacyMasterModel;
+  }
+
+  /** Whether the legacy master.model was actually applied as a fallback. */
+  get wasLegacyMasterApplied(): boolean {
+    if (!this.legacyMasterModel) return false;
+    // Same condition as createAgents(): if a preset override for council
+    // exists, the legacy model was NOT applied.
+    return !getAgentOverride(this.config, 'council')?.model;
   }
 
   /**
